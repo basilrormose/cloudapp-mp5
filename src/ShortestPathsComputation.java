@@ -4,6 +4,7 @@ import org.apache.giraph.edge.Edge;
 import org.apache.giraph.graph.Vertex;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.NullWritable;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 
@@ -12,24 +13,56 @@ import java.io.IOException;
  */
 public class ShortestPathsComputation extends BasicComputation<
     IntWritable, IntWritable, NullWritable, IntWritable> {
-  /** The shortest paths id */
-  public static final LongConfOption SOURCE_ID =
-      new LongConfOption("SimpleShortestPathsVertex.sourceId", 1,
-          "The shortest paths id");
 
-  /**
-   * Is this vertex the source id?
-   *
-   * @param vertex Vertex
-   * @return True if the source id
-   */
-  private boolean isSource(Vertex<IntWritable, ?, ?> vertex) {
-    return vertex.getId().get() == SOURCE_ID.get(getConf());
-  }
+    /** The shortest paths id */
+    public static final LongConfOption SOURCE_ID =
+        new LongConfOption("SimpleShortestPathsVertex.sourceId", 1, "The shortest paths id");
 
-  @Override
-  public void compute(
-      Vertex<IntWritable, IntWritable, NullWritable> vertex,
-      Iterable<IntWritable> messages) throws IOException {
-  }
+    private static final Logger LOG =
+            Logger.getLogger(ShortestPathsComputation.class);
+
+    /**
+    * Is this vertex the source id?
+    *
+    * @param vertex Vertex
+    * @return True if the source id
+    */
+    private boolean isSource(Vertex<IntWritable, ?, ?> vertex) {
+        return vertex.getId().get() == SOURCE_ID.get(getConf());
+    }
+
+    @Override
+    public void compute(
+        Vertex<IntWritable, IntWritable, NullWritable> vertex,
+        Iterable<IntWritable> messages) throws IOException {
+
+        int currentComponent = vertex.getValue().get();
+
+        // First superstep is special, because we can simply look at the neighbors
+        if (getSuperstep() == 0) {
+            vertex.setValue(new IntWritable(Integer.MAX_VALUE));
+        }
+
+        int minDist = isSource(vertex) ? 0 : Integer.MAX_VALUE;
+        for (IntWritable message : messages) {
+            minDist = Math.min(minDist, message.get());
+        }
+
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("Vertex " + vertex.getId() + " got minDist = " + minDist +
+                    " vertex value = " + vertex.getValue());
+        }
+
+        if (minDist < vertex.getValue().get()) {
+            vertex.setValue(new IntWritable(minDist));
+            for (Edge<IntWritable, NullWritable> edge : vertex.getEdges()) {
+                int distance = minDist + 1;
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug("Vertex " + vertex.getId() + " sent to " + edge.getTargetVertexId() + " = " + distance);
+                }
+                sendMessage(edge.getTargetVertexId(), new IntWritable(distance));
+            }
+        }
+        vertex.voteToHalt();
+    }
 }
