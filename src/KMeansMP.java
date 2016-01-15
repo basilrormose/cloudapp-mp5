@@ -62,7 +62,7 @@ public final class KMeansMP {
         int runs = 1;
         long seed = 0;
 
-        SparkConf sparkConf = new SparkConf().setAppName("KMeans MP");
+        SparkConf sparkConf = new SparkConf().setAppName("KMeansMP");
         JavaSparkContext sc = new JavaSparkContext(sparkConf);
 
         JavaRDD<String> lines = sc.textFile(inputFile);
